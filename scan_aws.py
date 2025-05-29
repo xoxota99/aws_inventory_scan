@@ -129,16 +129,17 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
     except Exception as e:
         print(f"General error with service {service_name} in region {region}: {e}")
 
-def get_all_resource_arns(additional_services=None):
+def get_all_resource_arns(additional_services=None, specific_region=None):
     """Get ARNs for all resources across supported services and regions."""
     account_id = get_account_id()
-    regions = get_all_regions()
+    # Use specific region if provided, otherwise get all regions
+    regions = [specific_region] if specific_region else get_all_regions()
 
     # List of services to check
     default_services = [
         # Default services to scan
         'ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
-        'cloudformation', 'sqs', 'sns'
+        'cloudformation', 'sqs', 'sns',
     ]
 
     resource_arns = []
@@ -193,6 +194,8 @@ def main():
     parser = argparse.ArgumentParser(description='List all AWS resource ARNs under the currently logged-in account.')
     parser.add_argument('--services', '-s', nargs='+', help='Additional AWS services to scan (e.g., "apigateway" "kms" "secretsmanager")')
     parser.add_argument('--output', '-o', default='aws_resource_arns.json', help='Output file path (default: aws_resource_arns.json)')
+    parser.add_argument('--region', '-r', help='Specific AWS region to scan (default: scan all regions)')
+
     args = parser.parse_args()
 
     additional_services = args.services
@@ -201,9 +204,13 @@ def main():
     if additional_services:
         print(f"Including additional services: {', '.join(additional_services)}")
 
+    if args.region:
+        print(f"Scanning only region: {args.region}")
+        print("Scanning all available regions")
+
     print("Collecting AWS resource ARNs. This may take a while...")
     # Pass additional services to the function
-    resource_arns = get_all_resource_arns(additional_services)
+    resource_arns = get_all_resource_arns(additional_services, args.region)
 
     # Print the results
     print(f"\nFound {len(resource_arns)} resources:")
