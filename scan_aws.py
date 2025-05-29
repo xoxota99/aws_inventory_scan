@@ -3,6 +3,7 @@
 import boto3
 import json
 from botocore.exceptions import ClientError
+import argparse
 import concurrent.futures
 
 default_region = 'us-east-1'
@@ -128,13 +129,14 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
     except Exception as e:
         print(f"General error with service {service_name} in region {region}: {e}")
 
-def get_all_resource_arns():
+def get_all_resource_arns(additional_services=None):
     """Get ARNs for all resources across supported services and regions."""
     account_id = get_account_id()
     regions = get_all_regions()
 
     # List of services to check
-    services = [
+    default_services = [
+        # Default services to scan
         'ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
         'cloudformation', 'sqs', 'sns'
     ]
@@ -142,6 +144,12 @@ def get_all_resource_arns():
     resource_arns = []
 
     # Use ThreadPoolExecutor to parallelize API calls
+    services = default_services.copy()
+
+    # Add any additional services specified by the user
+    if additional_services:
+        services.extend([s for s in additional_services if s not in services])
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
 
@@ -181,8 +189,21 @@ def get_all_resource_arns():
     return resource_arns
 
 def main():
+    # Set up command line argument parsing
+    parser = argparse.ArgumentParser(description='List all AWS resource ARNs under the currently logged-in account.')
+    parser.add_argument('--services', '-s', nargs='+', help='Additional AWS services to scan (e.g., "apigateway" "kms" "secretsmanager")')
+    parser.add_argument('--output', '-o', default='aws_resource_arns.json', help='Output file path (default: aws_resource_arns.json)')
+    args = parser.parse_args()
+
+    additional_services = args.services
+    output_file = args.output
+
+    if additional_services:
+        print(f"Including additional services: {', '.join(additional_services)}")
+
     print("Collecting AWS resource ARNs. This may take a while...")
-    resource_arns = get_all_resource_arns()
+    # Pass additional services to the function
+    resource_arns = get_all_resource_arns(additional_services)
 
     # Print the results
     print(f"\nFound {len(resource_arns)} resources:")
@@ -190,10 +211,10 @@ def main():
         print(arn)
 
     # Optionally save to a file
-    with open('aws_resource_arns.json', 'w') as f:
+    with open(output_file, 'w') as f:
         json.dump(resource_arns, f, indent=2)
 
-    print(f"\nResource ARNs have been saved to aws_resource_arns.json")
+    print(f"\nResource ARNs have been saved to {output_file}")
 
 if __name__ == "__main__":
     main()
