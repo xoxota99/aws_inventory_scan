@@ -588,7 +588,7 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
         # Default services to scan
         'ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
         'cloudformation', 'sqs', 'sns',
-        'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'route53', 'ecs', 'kms',
+        'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms',
     ]
 
     resource_arns = []
