@@ -10,6 +10,10 @@ import time
 # Default region for global services
 default_region = 'us-east-1'
 
+# Define global services that should only be queried once
+global_services = ['iam', 's3', 'route53', 'cloudfront', 'organizations',
+                  'waf', 'shield', 'budgets', 'ce', 'chatbot', 'health']
+
 def get_all_regions():
     """Get all available AWS regions."""
     ec2_client = boto3.client('ec2', region_name=default_region)  # Specify a default region
@@ -169,6 +173,11 @@ def get_service_resources(client, service_name, region, account_id, verbose=Fals
     # Check if we have a mapping for this service
     if service_name in service_mappings:
         mapping = service_mappings[service_name]
+        
+        # Skip if this is a global service and we're not in the default region
+        if service_name in global_services and region != default_region:
+            return resources
+
         if verbose:
             print(f"DEBUG: Processing {service_name} in {region} using method {mapping['method']}")
             start_time = time.time()
@@ -282,6 +291,10 @@ def get_service_resources(client, service_name, region, account_id, verbose=Fals
 def collect_resources_for_service(service_name, region, account_id, resource_arns, verbose=False):
     """Collect resources for a specific service in a region."""
     try:
+        # Skip if this is a global service and we're not in the default region
+        if service_name in global_services and region != default_region:
+            return
+
         # Create a boto3 client for the service in the specified region
         client = boto3.client(service_name, region_name=region)
 
@@ -582,7 +595,6 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
         elif service_name == 'route53':
             # Route53 is a global service, only run in the default region
             if region == default_region:
-                # Get hosted zones
                 if verbose:
                     print(f"DEBUG: Starting Route53 resource collection")
                     start_time = time.time()
@@ -756,9 +768,6 @@ def get_all_resource_arns(additional_services=None, specific_region=None, verbos
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = []
 
-        # Global services only need to be checked once
-        global_services = ['iam', 's3', 'route53']
-
         for service in services:
             if service in global_services:
                 futures.append(
@@ -816,6 +825,8 @@ def main():
         print("Scanning all available regions")
 
     print("Collecting AWS resource ARNs. This may take a while...")
+    if(args.verbose):
+        print("VERBOSE=TRUE")
     # Pass additional services to the function
     resource_arns = get_all_resource_arns(additional_services, args.region, args.verbose)
 
