@@ -439,17 +439,7 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 resource_arns.append(arn)
 
         elif service_name == 'cloudwatch':
-            # Create a separate logs client for log groups
-            logs_client = boto3.client('logs', region_name=region)
-            paginator = logs_client.get_paginator('describe_log_groups')
-            for page in paginator.paginate():
-                for log_group in page.get('logGroups', []):
-                    arn = log_group.get('arn')
-                    if not arn:  # If ARN is not directly provided, construct it
-                        log_group_name = log_group['logGroupName']
-                        arn = f"arn:aws:logs:{region}:{account_id}:log-group:{log_group_name}"
-                    resource_arns.append(arn)
-
+            
             # CloudWatch Alarms
             paginator = client.get_paginator('describe_alarms')
             for page in paginator.paginate():
@@ -467,6 +457,19 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
             for dashboard in response.get('DashboardEntries', []):
                 arn = dashboard['DashboardArn']
                 resource_arns.append(arn)
+
+        elif service_name == 'logs':
+            # CloudWatch Log Groups
+            paginator = client.get_paginator('describe_log_groups')
+            for page in paginator.paginate():
+                for log_group in page.get('logGroups', []):
+                    arn = log_group.get('arn')
+                    if not arn:  # If ARN is not directly provided, construct it
+                        log_group_name = log_group['logGroupName']
+                        arn = f"arn:aws:logs:{region}:{account_id}:log-group:{log_group_name}"
+                    resource_arns.append(arn)
+
+                    # Note: We could also add log streams here if needed
 
         elif service_name == 'route53':
             # Route53 is a global service, only run in the default region
