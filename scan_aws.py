@@ -284,6 +284,74 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:security-group/{sg_id}"
                 resource_arns.append(arn)
 
+            # EC2 Elastic IP Addresses
+            response = client.describe_addresses()
+            for eip in response.get('Addresses', []):
+                allocation_id = eip.get('AllocationId')
+                if allocation_id:
+                    arn = f"arn:aws:ec2:{region}:{account_id}:elastic-ip/{allocation_id}"
+                    resource_arns.append(arn)
+
+            # EC2 VPC resources
+            # VPCs
+            response = client.describe_vpcs()
+            for vpc in response.get('Vpcs', []):
+                vpc_id = vpc['VpcId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:vpc/{vpc_id}"
+                resource_arns.append(arn)
+
+            # Subnets
+            response = client.describe_subnets()
+            for subnet in response.get('Subnets', []):
+                subnet_id = subnet['SubnetId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:subnet/{subnet_id}"
+                resource_arns.append(arn)
+
+            # Route Tables
+            response = client.describe_route_tables()
+            for rt in response.get('RouteTables', []):
+                rt_id = rt['RouteTableId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:route-table/{rt_id}"
+                resource_arns.append(arn)
+
+            # Network ACLs
+            response = client.describe_network_acls()
+            for nacl in response.get('NetworkAcls', []):
+                nacl_id = nacl['NetworkAclId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:network-acl/{nacl_id}"
+                resource_arns.append(arn)
+
+            # Internet Gateways
+            response = client.describe_internet_gateways()
+            for igw in response.get('InternetGateways', []):
+                igw_id = igw['InternetGatewayId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:internet-gateway/{igw_id}"
+                resource_arns.append(arn)
+
+            # NAT Gateways
+            response = client.describe_nat_gateways()
+            for nat in response.get('NatGateways', []):
+                nat_id = nat['NatGatewayId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:nat-gateway/{nat_id}"
+                resource_arns.append(arn)
+
+            # Elastic Network Interfaces
+            response = client.describe_network_interfaces()
+            for eni in response.get('NetworkInterfaces', []):
+                eni_id = eni['NetworkInterfaceId']
+                arn = f"arn:aws:ec2:{region}:{account_id}:network-interface/{eni_id}"
+                resource_arns.append(arn)
+
+            # Transit Gateways
+            try:
+                response = client.describe_transit_gateways()
+                for tgw in response.get('TransitGateways', []):
+                    arn = tgw.get('TransitGatewayArn')
+                    if arn:
+                        resource_arns.append(arn)
+            except Exception as e:
+                print(f"Error getting transit gateways: {str(e)}")
+
         elif service_name == 's3':
             # S3 buckets (global service but listing here)
             response = client.list_buckets()
@@ -291,6 +359,26 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 bucket_name = bucket['Name']
                 arn = f"arn:aws:s3:::{bucket_name}"
                 resource_arns.append(arn)
+
+                # List objects in buckets (with pagination)
+                try:
+                    # Only list objects in buckets that are in the current region or global
+                    bucket_region = client.get_bucket_location(Bucket=bucket_name)
+                    location_constraint = bucket_region.get('LocationConstraint', '')
+
+                    # Handle the special case where None means us-east-1
+                    if location_constraint is None:
+                        location_constraint = 'us-east-1'
+
+                    if location_constraint == region or location_constraint == '':
+                        # Only list top-level objects to avoid excessive API calls
+                        paginator = client.get_paginator('list_objects_v2')
+                        for page in paginator.paginate(Bucket=bucket_name, MaxKeys=100, Delimiter='/'):
+                            for obj in page.get('Contents', []):
+                                arn = f"arn:aws:s3:::{bucket_name}/{obj['Key']}"
+                                resource_arns.append(arn)
+                except Exception as e:
+                    print(f"Error listing objects in bucket {bucket_name}: {str(e)}")
 
         elif service_name == 'iam':
             # IAM roles (global service)
@@ -306,6 +394,39 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = user['Arn']
                     resource_arns.append(arn)
 
+                # IAM policies
+                response = client.list_policies(Scope='Local')
+                for policy in response.get('Policies', []):
+                    arn = policy['Arn']
+                    resource_arns.append(arn)
+
+                # IAM groups
+                response = client.list_groups()
+                for group in response.get('Groups', []):
+                    arn = group['Arn']
+                    resource_arns.append(arn)
+
+                # IAM instance profiles
+                response = client.list_instance_profiles()
+                for profile in response.get('InstanceProfiles', []):
+                    arn = profile['Arn']
+                    resource_arns.append(arn)
+
+                # IAM SAML providers
+                response = client.list_saml_providers()
+                for provider in response.get('SAMLProviderList', []):
+                    arn = provider['Arn']
+                    resource_arns.append(arn)
+
+                # IAM server certificates
+                try:
+                    response = client.list_server_certificates()
+                    for cert in response.get('ServerCertificateMetadataList', []):
+                        arn = cert['Arn']
+                        resource_arns.append(arn)
+                except Exception as e:
+                    print(f"Error listing server certificates: {str(e)}")
+
         elif service_name == 'sqs':
             # SQS queues
             response = client.list_queues()
@@ -316,6 +437,125 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 )
                 arn = queue_attrs['Attributes']['QueueArn']
                 resource_arns.append(arn)
+
+        elif service_name == 'cloudwatch':
+            # Create a separate logs client for log groups
+            logs_client = boto3.client('logs', region_name=region)
+            paginator = logs_client.get_paginator('describe_log_groups')
+            for page in paginator.paginate():
+                for log_group in page.get('logGroups', []):
+                    arn = log_group.get('arn')
+                    if not arn:  # If ARN is not directly provided, construct it
+                        log_group_name = log_group['logGroupName']
+                        arn = f"arn:aws:logs:{region}:{account_id}:log-group:{log_group_name}"
+                    resource_arns.append(arn)
+
+            # CloudWatch Alarms
+            paginator = client.get_paginator('describe_alarms')
+            for page in paginator.paginate():
+                for alarm in page.get('MetricAlarms', []):
+                    alarm_name = alarm['AlarmName']
+                    arn = f"arn:aws:cloudwatch:{region}:{account_id}:alarm:{alarm_name}"
+                    resource_arns.append(arn)
+                for alarm in page.get('CompositeAlarms', []):
+                    alarm_name = alarm['AlarmName']
+                    arn = f"arn:aws:cloudwatch:{region}:{account_id}:alarm:{alarm_name}"
+                    resource_arns.append(arn)
+
+            # CloudWatch Dashboards
+            response = client.list_dashboards()
+            for dashboard in response.get('DashboardEntries', []):
+                arn = dashboard['DashboardArn']
+                resource_arns.append(arn)
+
+        elif service_name == 'route53':
+            # Route53 is a global service, only run in the default region
+            if region == default_region:
+                # Get hosted zones
+                paginator = client.get_paginator('list_hosted_zones')
+                for page in paginator.paginate():
+                    for zone in page.get('HostedZones', []):
+                        zone_id = zone['Id']
+                        arn = f"arn:aws:route53:::{zone_id}"
+                        resource_arns.append(arn)
+
+                        # Get record sets for each zone
+                        try:
+                            # Extract the ID without the /hostedzone/ prefix
+                            clean_zone_id = zone_id.split('/')[-1]
+                            record_paginator = client.get_paginator('list_resource_record_sets')
+                            for record_page in record_paginator.paginate(HostedZoneId=clean_zone_id):
+                                for record in record_page.get('ResourceRecordSets', []):
+                                    record_name = record['Name']
+                                    record_type = record['Type']
+                                    # Route53 record ARNs don't officially exist, but we can create a pseudo-ARN
+                                    arn = f"arn:aws:route53:::{zone_id}/record/{record_name}/{record_type}"
+                                    resource_arns.append(arn)
+                        except Exception as e:
+                            print(f"Error getting record sets for zone {zone_id}: {str(e)}")
+
+                # Get health checks
+                paginator = client.get_paginator('list_health_checks')
+                for page in paginator.paginate():
+                    for health_check in page.get('HealthChecks', []):
+                        health_check_id = health_check['Id']
+                        arn = f"arn:aws:route53:::healthcheck/{health_check_id}"
+                        resource_arns.append(arn)
+
+        elif service_name == 'ecs':
+            # ECS Clusters
+            paginator = client.get_paginator('list_clusters')
+            cluster_arns = []
+            for page in paginator.paginate():
+                cluster_arns.extend(page.get('clusterArns', []))
+
+            for cluster_arn in cluster_arns:
+                resource_arns.append(cluster_arn)
+
+                # Get services for each cluster
+                try:
+                    service_paginator = client.get_paginator('list_services')
+                    for service_page in service_paginator.paginate(cluster=cluster_arn):
+                        for service_arn in service_page.get('serviceArns', []):
+                            resource_arns.append(service_arn)
+                except Exception as e:
+                    print(f"Error getting services for cluster {cluster_arn}: {str(e)}")
+
+                # Get task definitions
+                try:
+                    task_def_paginator = client.get_paginator('list_task_definitions')
+                    for task_def_page in task_def_paginator.paginate():
+                        for task_def_arn in task_def_page.get('taskDefinitionArns', []):
+                            resource_arns.append(task_def_arn)
+                except Exception as e:
+                    print(f"Error getting task definitions: {str(e)}")
+
+                # Get tasks for each cluster
+                try:
+                    task_paginator = client.get_paginator('list_tasks')
+                    for task_page in task_paginator.paginate(cluster=cluster_arn):
+                        for task_arn in task_page.get('taskArns', []):
+                            resource_arns.append(task_arn)
+                except Exception as e:
+                    print(f"Error getting tasks for cluster {cluster_arn}: {str(e)}")
+
+        elif service_name == 'kms':
+            # KMS Keys
+            paginator = client.get_paginator('list_keys')
+            for page in paginator.paginate():
+                for key in page.get('Keys', []):
+                    key_id = key['KeyId']
+                    key_arn = key['KeyArn']
+                    resource_arns.append(key_arn)
+
+                    # Get aliases for each key
+                    try:
+                        alias_response = client.list_aliases(KeyId=key_id)
+                        for alias in alias_response.get('Aliases', []):
+                            alias_arn = alias['AliasArn']
+                            resource_arns.append(alias_arn)
+                    except Exception as e:
+                        print(f"Error getting aliases for key {key_id}: {str(e)}")
 
         else:
             # Use the generic service resource collector for other services
@@ -345,7 +585,7 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
         # Default services to scan
         'ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
         'cloudformation', 'sqs', 'sns',
-        'kinesisanalytics', 'kinesisanalyticsv2',
+        'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'route53', 'ecs', 'kms',
     ]
 
     resource_arns = []
@@ -361,7 +601,7 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
         futures = []
 
         # Global services only need to be checked once
-        global_services = ['iam', 's3']
+        global_services = ['iam', 's3', 'route53']
 
         for service in services:
             if service in global_services:
