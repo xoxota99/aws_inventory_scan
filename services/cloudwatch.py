@@ -3,11 +3,17 @@ CloudWatch resource collector for AWS inventory scan.
 """
 
 import time
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
 
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect CloudWatch resources in a region."""
     if verbose:
-        print(f"DEBUG: Starting CloudWatch resource collection in {region}")
+        logger.debug(f"Starting CloudWatch resource collection in {region}")
         start_time = time.time()
 
     # CloudWatch Alarms
@@ -23,7 +29,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected CloudWatch alarms in {region}, now collecting dashboards")
+        logger.debug(f"Collected CloudWatch alarms in {region}, now collecting dashboards")
 
     # CloudWatch Dashboards
     response = client.list_dashboards()
@@ -33,4 +39,4 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
 
     if verbose:
         elapsed = time.time() - start_time
-        print(f"DEBUG: Completed CloudWatch resource collection in {region} in {elapsed:.2f}s")
+        logger.debug(f"Completed CloudWatch resource collection in {region} in {elapsed:.2f}s")

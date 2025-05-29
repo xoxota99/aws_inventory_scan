@@ -3,11 +3,17 @@ EC2 resource collector for AWS inventory scan.
 """
 
 import time
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
 
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect EC2 resources in a region."""
     if verbose:
-        print(f"DEBUG: Starting EC2 resource collection in {region}")
+        logger.debug(f"Starting EC2 resource collection in {region}")
         start_time = time.time()
 
     # EC2 instances
@@ -19,7 +25,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 instances in {region}, now collecting volumes")
+        logger.debug(f"Collected EC2 instances in {region}, now collecting volumes")
 
     # EC2 volumes
     response = client.describe_volumes()
@@ -29,7 +35,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 volumes in {region}, now collecting security groups")
+        logger.debug(f"Collected EC2 volumes in {region}, now collecting security groups")
 
     # EC2 security groups
     response = client.describe_security_groups()
@@ -39,7 +45,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 security groups in {region}, now collecting Elastic IPs")
+        logger.debug(f"Collected EC2 security groups in {region}, now collecting Elastic IPs")
 
     # EC2 Elastic IP Addresses
     response = client.describe_addresses()
@@ -50,7 +56,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 Elastic IPs in {region}, now collecting VPCs")
+        logger.debug(f"Collected EC2 Elastic IPs in {region}, now collecting VPCs")
 
     # EC2 VPC resources
     # VPCs
@@ -61,7 +67,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 VPCs in {region}, now collecting subnets")
+        logger.debug(f"Collected EC2 VPCs in {region}, now collecting subnets")
 
     # Subnets
     response = client.describe_subnets()
@@ -71,7 +77,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 subnets in {region}, now collecting route tables")
+        logger.debug(f"Collected EC2 subnets in {region}, now collecting route tables")
 
     # Route Tables
     response = client.describe_route_tables()
@@ -81,7 +87,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 route tables in {region}, now collecting NACLs")
+        logger.debug(f"Collected EC2 route tables in {region}, now collecting NACLs")
 
     # Network ACLs
     response = client.describe_network_acls()
@@ -91,7 +97,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 NACLs in {region}, now collecting internet gateways")
+        logger.debug(f"Collected EC2 NACLs in {region}, now collecting internet gateways")
 
     # Internet Gateways
     response = client.describe_internet_gateways()
@@ -101,7 +107,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 internet gateways in {region}, now collecting NAT gateways")
+        logger.debug(f"Collected EC2 internet gateways in {region}, now collecting NAT gateways")
 
     # NAT Gateways
     response = client.describe_nat_gateways()
@@ -111,7 +117,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 NAT gateways in {region}, now collecting network interfaces")
+        logger.debug(f"Collected EC2 NAT gateways in {region}, now collecting network interfaces")
 
     # Elastic Network Interfaces
     response = client.describe_network_interfaces()
@@ -121,7 +127,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected EC2 network interfaces in {region}, now collecting transit gateways")
+        logger.debug(f"Collected EC2 network interfaces in {region}, now collecting transit gateways")
 
     # Transit Gateways
     try:
@@ -132,10 +138,10 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
                 resource_arns.append(arn)
     except Exception as e:
         if verbose:
-            print(f"DEBUG: Error getting transit gateways in {region}: {str(e)}")
+            logger.debug(f"Error getting transit gateways in {region}: {str(e)}")
         else:
             print(f"Error getting transit gateways: {str(e)}")
 
     if verbose:
         elapsed = time.time() - start_time
-        print(f"DEBUG: Completed EC2 resource collection in {region} in {elapsed:.2f}s")
+        logger.debug(f"Completed EC2 resource collection in {region} in {elapsed:.2f}s")

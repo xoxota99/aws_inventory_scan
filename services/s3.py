@@ -2,6 +2,13 @@
 S3 resource collector for AWS inventory scan.
 """
 
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
+
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect S3 resources."""
     # S3 buckets (global service but listing here)
@@ -15,7 +22,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         # List objects in buckets (with pagination)
         try:
             if verbose:
-                print(f"DEBUG: Getting location for bucket {bucket_name}")
+                logger.debug(f"Getting location for bucket {bucket_name}")
             # Only list objects in buckets that are in the current region or global
             bucket_region = client.get_bucket_location(Bucket=bucket_name)
             location_constraint = bucket_region.get('LocationConstraint', '')
@@ -26,7 +33,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
 
             if location_constraint == region or location_constraint == '':
                 if verbose:
-                    print(f"DEBUG: Listing objects in bucket {bucket_name} (region: {location_constraint})")
+                    logger.debug(f"Listing objects in bucket {bucket_name} (region: {location_constraint})")
                 # Only list top-level objects to avoid excessive API calls
                 paginator = client.get_paginator('list_objects_v2')
                 for page in paginator.paginate(Bucket=bucket_name, MaxKeys=100, Delimiter='/'):
@@ -35,9 +42,9 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
                         resource_arns.append(arn)
         except Exception as e:
             if verbose:
-                print(f"DEBUG: Error listing objects in bucket {bucket_name}: {str(e)}")
+                logger.debug(f"Error listing objects in bucket {bucket_name}: {str(e)}")
             else:
                 print(f"Error listing objects in bucket {bucket_name}: {str(e)}")
 
     if verbose:
-        print(f"DEBUG: Processed {bucket_count} S3 buckets")
+        logger.debug(f"Processed {bucket_count} S3 buckets")

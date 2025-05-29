@@ -2,6 +2,13 @@
 IAM resource collector for AWS inventory scan.
 """
 
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
+
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect IAM resources (global service)."""
     # IAM roles
@@ -17,7 +24,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected IAM roles and users, now collecting policies")
+        logger.debug(f"Collected IAM roles and users, now collecting policies")
 
     # IAM policies
     response = client.list_policies(Scope='Local')
@@ -32,7 +39,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected IAM groups, now collecting instance profiles")
+        logger.debug(f"Collected IAM groups, now collecting instance profiles")
 
     # IAM instance profiles
     response = client.list_instance_profiles()
@@ -47,7 +54,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
         resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected IAM SAML providers, now collecting server certificates")
+        logger.debug(f"Collected IAM SAML providers, now collecting server certificates")
 
     # IAM server certificates
     try:
@@ -57,6 +64,6 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             resource_arns.append(arn)
     except Exception as e:
         if verbose:
-            print(f"DEBUG: Error listing server certificates: {str(e)}")
+            logger.debug(f"Error listing server certificates: {str(e)}")
         else:
             print(f"Error listing server certificates: {str(e)}")

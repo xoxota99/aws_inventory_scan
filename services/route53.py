@@ -3,11 +3,17 @@ Route53 resource collector for AWS inventory scan.
 """
 
 import time
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
 
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect Route53 resources (global service)."""
     if verbose:
-        print(f"DEBUG: Starting Route53 resource collection")
+        logger.debug(f"Starting Route53 resource collection")
         start_time = time.time()
 
     paginator = client.get_paginator('list_hosted_zones')
@@ -20,7 +26,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             # Get record sets for each zone
             try:
                 if verbose:
-                    print(f"DEBUG: Getting record sets for zone {zone_id}")
+                    logger.debug(f"Getting record sets for zone {zone_id}")
                 # Extract the ID without the /hostedzone/ prefix
                 clean_zone_id = zone_id.split('/')[-1]
                 record_paginator = client.get_paginator('list_resource_record_sets')
@@ -33,7 +39,7 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
                         resource_arns.append(arn)
             except Exception as e:
                 if verbose:
-                    print(f"DEBUG: Error getting record sets for zone {zone_id}: {str(e)}")
+                    logger.debug(f"Error getting record sets for zone {zone_id}: {str(e)}")
                 else:
                     print(f"Error getting record sets for zone {zone_id}: {str(e)}")
 
@@ -47,4 +53,4 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
 
     if verbose:
         elapsed = time.time() - start_time
-        print(f"DEBUG: Completed Route53 resource collection in {elapsed:.2f}s")
+        logger.debug(f"Completed Route53 resource collection in {elapsed:.2f}s")

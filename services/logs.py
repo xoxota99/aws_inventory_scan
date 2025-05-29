@@ -2,6 +2,13 @@
 CloudWatch Logs resource collector for AWS inventory scan.
 """
 
+try:
+    from logging_config import get_logger
+    logger = get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger('aws_inventory_scan')
+
 def collect_resources(client, region, account_id, resource_arns, verbose=False):
     """Collect CloudWatch Logs resources in a region."""
     # CloudWatch Log Groups
@@ -15,4 +22,4 @@ def collect_resources(client, region, account_id, resource_arns, verbose=False):
             resource_arns.append(arn)
 
     if verbose:
-        print(f"DEBUG: Collected CloudWatch Log Groups in {region}")
+        logger.debug(f"Collected CloudWatch Log Groups in {region}")
