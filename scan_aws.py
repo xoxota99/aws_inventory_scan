@@ -5,6 +5,7 @@ import json
 from botocore.exceptions import ClientError
 import argparse
 import concurrent.futures
+import time
 
 # Default region for global services
 default_region = 'us-east-1'
@@ -31,7 +32,7 @@ def get_account_id():
             exit(1)
 
 # Service-specific resource collection functions
-def get_service_resources(client, service_name, region, account_id):
+def get_service_resources(client, service_name, region, account_id, verbose=False):
     """Get resources for a specific service using appropriate API calls."""
     resources = []
 
@@ -168,6 +169,9 @@ def get_service_resources(client, service_name, region, account_id):
     # Check if we have a mapping for this service
     if service_name in service_mappings:
         mapping = service_mappings[service_name]
+        if verbose:
+            print(f"DEBUG: Processing {service_name} in {region} using method {mapping['method']}")
+            start_time = time.time()
         method_name = mapping['method']
         response_key = mapping['key']
 
@@ -196,9 +200,14 @@ def get_service_resources(client, service_name, region, account_id):
                 # Health service requires filter
                 response = method(filter={})
             elif service_name == 'textract':
+                if verbose:
+                    print(f"DEBUG: Skipping textract as it requires a document ID")
                 # Textract requires a document ID which we don't have
                 return []
             else:
+                if verbose:
+                    print(f"DEBUG: Calling {method_name} for {service_name} in {region}")
+                    call_start = time.time()
                 # Standard method call
                 response = method()
 
@@ -206,6 +215,9 @@ def get_service_resources(client, service_name, region, account_id):
             if 'direct_arn' in mapping and mapping['direct_arn']:
                 # The response itself is the ARN
                 if response_key in response:
+                    if verbose:
+                        print(f"DEBUG: Found direct ARN for {service_name}")
+
                     resources.append(response[response_key])
             else:
                 # Navigate to the correct response key, handling nested keys with dots
@@ -220,6 +232,8 @@ def get_service_resources(client, service_name, region, account_id):
                 # Process the items
                 if 'id_list' in mapping and mapping['id_list']:
                     # Response is a list of IDs
+                    if verbose:
+                        print(f"DEBUG: Processing ID list with {len(items)} items for {service_name}")
                     for item_id in items:
                         arn = mapping['arn_format'].format(
                             region=region,
@@ -229,9 +243,13 @@ def get_service_resources(client, service_name, region, account_id):
                         resources.append(arn)
                 elif 'arn_list' in mapping and mapping['arn_list']:
                     # Response is a list of ARNs
+                    if verbose:
+                        print(f"DEBUG: Processing ARN list with {len(items)} items for {service_name}")
                     resources.extend(items)
                 else:
                     # Response is a list of objects
+                    if verbose:
+                        print(f"DEBUG: Processing object list with {len(items)} items for {service_name}")
                     for item in items:
                         if 'arn_attr' in mapping:
                             # Extract ARN directly from the item
@@ -248,13 +266,20 @@ def get_service_resources(client, service_name, region, account_id):
                                 )
                                 resources.append(arn)
 
+            if verbose:
+                elapsed = time.time() - start_time
+                print(f"DEBUG: Completed {service_name} in {region} in {elapsed:.2f}s, found {len(resources)} resources")
+
+
         except Exception as e:
             # Just log the error and continue
-            print(f"Error getting resources for {service_name}: {str(e)}")
+            print(f"Error getting resources for {service_name} in {region}: {str(e)}")
+            if verbose:
+                print(f"DEBUG: Exception details: {type(e).__name__}")
 
     return resources
 
-def collect_resources_for_service(service_name, region, account_id, resource_arns):
+def collect_resources_for_service(service_name, region, account_id, resource_arns, verbose=False):
     """Collect resources for a specific service in a region."""
     try:
         # Create a boto3 client for the service in the specified region
@@ -262,6 +287,10 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
 
         # Different services have different list/describe methods
         if service_name == 'ec2':
+            if verbose:
+                print(f"DEBUG: Starting EC2 resource collection in {region}")
+                start_time = time.time()
+
             # EC2 instances
             response = client.describe_instances()
             for reservation in response.get('Reservations', []):
@@ -270,6 +299,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
                     resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 instances in {region}, now collecting volumes")
+
             # EC2 volumes
             response = client.describe_volumes()
             for volume in response.get('Volumes', []):
@@ -277,12 +309,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:volume/{volume_id}"
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 volumes in {region}, now collecting security groups")
+
             # EC2 security groups
             response = client.describe_security_groups()
             for sg in response.get('SecurityGroups', []):
                 sg_id = sg['GroupId']
                 arn = f"arn:aws:ec2:{region}:{account_id}:security-group/{sg_id}"
                 resource_arns.append(arn)
+
+            if verbose:
+                print(f"DEBUG: Collected EC2 security groups in {region}, now collecting Elastic IPs")
 
             # EC2 Elastic IP Addresses
             response = client.describe_addresses()
@@ -292,6 +330,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = f"arn:aws:ec2:{region}:{account_id}:elastic-ip/{allocation_id}"
                     resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 Elastic IPs in {region}, now collecting VPCs")
+
             # EC2 VPC resources
             # VPCs
             response = client.describe_vpcs()
@@ -300,12 +341,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:vpc/{vpc_id}"
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 VPCs in {region}, now collecting subnets")
+
             # Subnets
             response = client.describe_subnets()
             for subnet in response.get('Subnets', []):
                 subnet_id = subnet['SubnetId']
                 arn = f"arn:aws:ec2:{region}:{account_id}:subnet/{subnet_id}"
                 resource_arns.append(arn)
+
+            if verbose:
+                print(f"DEBUG: Collected EC2 subnets in {region}, now collecting route tables")
 
             # Route Tables
             response = client.describe_route_tables()
@@ -314,12 +361,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:route-table/{rt_id}"
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 route tables in {region}, now collecting NACLs")
+
             # Network ACLs
             response = client.describe_network_acls()
             for nacl in response.get('NetworkAcls', []):
                 nacl_id = nacl['NetworkAclId']
                 arn = f"arn:aws:ec2:{region}:{account_id}:network-acl/{nacl_id}"
                 resource_arns.append(arn)
+
+            if verbose:
+                print(f"DEBUG: Collected EC2 NACLs in {region}, now collecting internet gateways")
 
             # Internet Gateways
             response = client.describe_internet_gateways()
@@ -328,6 +381,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:internet-gateway/{igw_id}"
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 internet gateways in {region}, now collecting NAT gateways")
+
             # NAT Gateways
             response = client.describe_nat_gateways()
             for nat in response.get('NatGateways', []):
@@ -335,12 +391,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = f"arn:aws:ec2:{region}:{account_id}:nat-gateway/{nat_id}"
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected EC2 NAT gateways in {region}, now collecting network interfaces")
+
             # Elastic Network Interfaces
             response = client.describe_network_interfaces()
             for eni in response.get('NetworkInterfaces', []):
                 eni_id = eni['NetworkInterfaceId']
                 arn = f"arn:aws:ec2:{region}:{account_id}:network-interface/{eni_id}"
                 resource_arns.append(arn)
+
+            if verbose:
+                print(f"DEBUG: Collected EC2 network interfaces in {region}, now collecting transit gateways")
 
             # Transit Gateways
             try:
@@ -350,11 +412,19 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     if arn:
                         resource_arns.append(arn)
             except Exception as e:
-                print(f"Error getting transit gateways: {str(e)}")
+                if verbose:
+                    print(f"DEBUG: Error getting transit gateways in {region}: {str(e)}")
+                else:
+                    print(f"Error getting transit gateways: {str(e)}")
+
+            if verbose:
+                elapsed = time.time() - start_time
+                print(f"DEBUG: Completed EC2 resource collection in {region} in {elapsed:.2f}s")
 
         elif service_name == 's3':
             # S3 buckets (global service but listing here)
             response = client.list_buckets()
+            bucket_count = len(response.get('Buckets', []))
             for bucket in response.get('Buckets', []):
                 bucket_name = bucket['Name']
                 arn = f"arn:aws:s3:::{bucket_name}"
@@ -362,6 +432,8 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
 
                 # List objects in buckets (with pagination)
                 try:
+                    if verbose:
+                        print(f"DEBUG: Getting location for bucket {bucket_name}")
                     # Only list objects in buckets that are in the current region or global
                     bucket_region = client.get_bucket_location(Bucket=bucket_name)
                     location_constraint = bucket_region.get('LocationConstraint', '')
@@ -371,6 +443,8 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                         location_constraint = 'us-east-1'
 
                     if location_constraint == region or location_constraint == '':
+                        if verbose:
+                            print(f"DEBUG: Listing objects in bucket {bucket_name} (region: {location_constraint})")
                         # Only list top-level objects to avoid excessive API calls
                         paginator = client.get_paginator('list_objects_v2')
                         for page in paginator.paginate(Bucket=bucket_name, MaxKeys=100, Delimiter='/'):
@@ -378,7 +452,13 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                                 arn = f"arn:aws:s3:::{bucket_name}/{obj['Key']}"
                                 resource_arns.append(arn)
                 except Exception as e:
-                    print(f"Error listing objects in bucket {bucket_name}: {str(e)}")
+                    if verbose:
+                        print(f"DEBUG: Error listing objects in bucket {bucket_name}: {str(e)}")
+                    else:
+                        print(f"Error listing objects in bucket {bucket_name}: {str(e)}")
+
+            if verbose:
+                print(f"DEBUG: Processed {bucket_count} S3 buckets")
 
         elif service_name == 'iam':
             # IAM roles (global service)
@@ -394,6 +474,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = user['Arn']
                     resource_arns.append(arn)
 
+                if verbose:
+                    print(f"DEBUG: Collected IAM roles and users, now collecting policies")
+
                 # IAM policies
                 response = client.list_policies(Scope='Local')
                 for policy in response.get('Policies', []):
@@ -405,6 +488,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 for group in response.get('Groups', []):
                     arn = group['Arn']
                     resource_arns.append(arn)
+
+                if verbose:
+                    print(f"DEBUG: Collected IAM groups, now collecting instance profiles")
 
                 # IAM instance profiles
                 response = client.list_instance_profiles()
@@ -418,6 +504,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = provider['Arn']
                     resource_arns.append(arn)
 
+                if verbose:
+                    print(f"DEBUG: Collected IAM SAML providers, now collecting server certificates")
+
                 # IAM server certificates
                 try:
                     response = client.list_server_certificates()
@@ -425,7 +514,10 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                         arn = cert['Arn']
                         resource_arns.append(arn)
                 except Exception as e:
-                    print(f"Error listing server certificates: {str(e)}")
+                    if verbose:
+                        print(f"DEBUG: Error listing server certificates: {str(e)}")
+                    else:
+                        print(f"Error listing server certificates: {str(e)}")
 
         elif service_name == 'sqs':
             # SQS queues
@@ -438,8 +530,14 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                 arn = queue_attrs['Attributes']['QueueArn']
                 resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected {len(response.get('QueueUrls', []))} SQS queues in {region}")
+
         elif service_name == 'cloudwatch':
-            
+            if verbose:
+                print(f"DEBUG: Starting CloudWatch resource collection in {region}")
+                start_time = time.time()
+
             # CloudWatch Alarms
             paginator = client.get_paginator('describe_alarms')
             for page in paginator.paginate():
@@ -452,11 +550,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                     arn = f"arn:aws:cloudwatch:{region}:{account_id}:alarm:{alarm_name}"
                     resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected CloudWatch alarms in {region}, now collecting dashboards")
+
             # CloudWatch Dashboards
             response = client.list_dashboards()
             for dashboard in response.get('DashboardEntries', []):
                 arn = dashboard['DashboardArn']
                 resource_arns.append(arn)
+
+            if verbose:
+                elapsed = time.time() - start_time
+                print(f"DEBUG: Completed CloudWatch resource collection in {region} in {elapsed:.2f}s")
 
         elif service_name == 'logs':
             # CloudWatch Log Groups
@@ -469,12 +574,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                         arn = f"arn:aws:logs:{region}:{account_id}:log-group:{log_group_name}"
                     resource_arns.append(arn)
 
+            if verbose:
+                print(f"DEBUG: Collected CloudWatch Log Groups in {region}")
+
                     # Note: We could also add log streams here if needed
 
         elif service_name == 'route53':
             # Route53 is a global service, only run in the default region
             if region == default_region:
                 # Get hosted zones
+                if verbose:
+                    print(f"DEBUG: Starting Route53 resource collection")
+                    start_time = time.time()
                 paginator = client.get_paginator('list_hosted_zones')
                 for page in paginator.paginate():
                     for zone in page.get('HostedZones', []):
@@ -484,6 +595,8 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
 
                         # Get record sets for each zone
                         try:
+                            if verbose:
+                                print(f"DEBUG: Getting record sets for zone {zone_id}")
                             # Extract the ID without the /hostedzone/ prefix
                             clean_zone_id = zone_id.split('/')[-1]
                             record_paginator = client.get_paginator('list_resource_record_sets')
@@ -495,7 +608,10 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                                     arn = f"arn:aws:route53:::{zone_id}/record/{record_name}/{record_type}"
                                     resource_arns.append(arn)
                         except Exception as e:
-                            print(f"Error getting record sets for zone {zone_id}: {str(e)}")
+                            if verbose:
+                                print(f"DEBUG: Error getting record sets for zone {zone_id}: {str(e)}")
+                            else:
+                                print(f"Error getting record sets for zone {zone_id}: {str(e)}")
 
                 # Get health checks
                 paginator = client.get_paginator('list_health_checks')
@@ -505,8 +621,15 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                         arn = f"arn:aws:route53:::healthcheck/{health_check_id}"
                         resource_arns.append(arn)
 
+                if verbose:
+                    elapsed = time.time() - start_time
+                    print(f"DEBUG: Completed Route53 resource collection in {elapsed:.2f}s")
+
         elif service_name == 'ecs':
             # ECS Clusters
+            if verbose:
+                print(f"DEBUG: Starting ECS resource collection in {region}")
+                start_time = time.time()
             paginator = client.get_paginator('list_clusters')
             cluster_arns = []
             for page in paginator.paginate():
@@ -517,12 +640,18 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
 
                 # Get services for each cluster
                 try:
+                    if verbose:
+                        print(f"DEBUG: Getting services for cluster {cluster_arn}")
                     service_paginator = client.get_paginator('list_services')
                     for service_page in service_paginator.paginate(cluster=cluster_arn):
                         for service_arn in service_page.get('serviceArns', []):
                             resource_arns.append(service_arn)
+                            
                 except Exception as e:
-                    print(f"Error getting services for cluster {cluster_arn}: {str(e)}")
+                    if verbose:
+                        print(f"DEBUG: Error getting task definitions: {str(e)}")
+                    else:
+                        print(f"Error getting services for cluster {cluster_arn}: {str(e)}")
 
                 # Get task definitions
                 try:
@@ -541,9 +670,19 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
                             resource_arns.append(task_arn)
                 except Exception as e:
                     print(f"Error getting tasks for cluster {cluster_arn}: {str(e)}")
+                    if verbose:
+                        print(f"DEBUG: Error getting tasks for cluster {cluster_arn}: {str(e)}")
+                    else:
+                        print(f"Error getting tasks for cluster {cluster_arn}: {str(e)}")
+
+            if verbose:
+                elapsed = time.time() - start_time
+                print(f"DEBUG: Completed ECS resource collection in {region} in {elapsed:.2f}s")
 
         elif service_name == 'kms':
             # KMS Keys
+            if verbose:
+                print(f"DEBUG: Starting KMS resource collection in {region}")
             paginator = client.get_paginator('list_keys')
             for page in paginator.paginate():
                 for key in page.get('Keys', []):
@@ -553,16 +692,26 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
 
                     # Get aliases for each key
                     try:
+                        if verbose:
+                            print(f"DEBUG: Getting aliases for key {key_id}")
                         alias_response = client.list_aliases(KeyId=key_id)
                         for alias in alias_response.get('Aliases', []):
                             alias_arn = alias['AliasArn']
                             resource_arns.append(alias_arn)
                     except Exception as e:
-                        print(f"Error getting aliases for key {key_id}: {str(e)}")
+                        if verbose:
+                            print(f"DEBUG: Error getting aliases for key {key_id}: {str(e)}")
+                        else:
+                            print(f"Error getting aliases for key {key_id}: {str(e)}")
+
+            if verbose:
+                print(f"DEBUG: Completed KMS resource collection in {region}")
 
         else:
             # Use the generic service resource collector for other services
-            resources = get_service_resources(client, service_name, region, account_id)
+            if verbose:
+                print(f"DEBUG: Using generic collector for {service_name} in {region}")
+            resources = get_service_resources(client, service_name, region, account_id, verbose)
             resource_arns.extend(resources)
 
     except ClientError as e:
@@ -573,11 +722,15 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
         elif 'InvalidClientTokenId' in str(e):
             print(f"Invalid credentials for service {service_name} in region {region}")
         else:
-            print(f"Error with service {service_name} in region {region}: {e}")
+            print(f"Error with service {service_name} in region {region}: {str(e)}")
+            if verbose:
+                print(f"DEBUG: Full exception details for {service_name} in {region}: {type(e).__name__}: {str(e)}")
     except Exception as e:
-        print(f"General error with service {service_name} in region {region}: {e}")
+        print(f"General error with service {service_name} in region {region}: {str(e)}")
+        if verbose:
+            print(f"DEBUG: Full exception details for {service_name} in {region}: {type(e).__name__}: {str(e)}")
 
-def get_all_resource_arns(additional_services=None, specific_region=None):
+def get_all_resource_arns(additional_services=None, specific_region=None, verbose=False):
     """Get ARNs for all resources across supported services and regions."""
     account_id = get_account_id()
     # Use specific region if provided, otherwise get all regions
@@ -600,7 +753,7 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
     if additional_services:
         services.extend([s for s in additional_services if s not in services])
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = []
 
         # Global services only need to be checked once
@@ -614,7 +767,8 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
                         service,
                         default_region,  # Use a default region for global services
                         account_id,
-                        resource_arns
+                        resource_arns,
+                        verbose
                     )
                 )
             else:
@@ -634,7 +788,10 @@ def get_all_resource_arns(additional_services=None, specific_region=None):
             try:
                 future.result()
             except Exception as e:
-                print(f"Error in thread: {e}")
+                print(f"Error in thread: {str(e)}")
+                if verbose:
+                    import traceback
+                    print(f"DEBUG: Thread exception details: {traceback.format_exc()}")
 
     return resource_arns
 
@@ -643,6 +800,7 @@ def main():
     parser = argparse.ArgumentParser(description='List all AWS resource ARNs under the currently logged-in account.')
     parser.add_argument('--services', '-s', nargs='+', help='Additional AWS services to scan (e.g., "apigateway" "kms" "secretsmanager")')
     parser.add_argument('--output', '-o', default='aws_resource_arns.json', help='Output file path (default: aws_resource_arns.json)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose debug output')
     parser.add_argument('--region', '-r', help='Specific AWS region to scan (default: scan all regions)')
 
     args = parser.parse_args()
@@ -659,7 +817,7 @@ def main():
 
     print("Collecting AWS resource ARNs. This may take a while...")
     # Pass additional services to the function
-    resource_arns = get_all_resource_arns(additional_services, args.region)
+    resource_arns = get_all_resource_arns(additional_services, args.region, args.verbose)
 
     # Print the results
     print(f"\nFound {len(resource_arns)} resources:")
