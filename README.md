@@ -43,7 +43,6 @@ python scan_aws.py
 ### Command Line Options
 
 - `--services` or `-s`: Specify additional AWS services to scan. The tool will *always* scan the default set of services ('ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam', 'cloudformation', 'sqs', 'sns', 'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms'), but you can specify *additional* services using this argument.
-- 
   ```
   python scan_aws.py -s apigateway kms secretsmanager
   ```
@@ -127,4 +126,4 @@ The tool handles various AWS API errors:
 
 ## License
 
-GPL-3
+This project is licensed under the GNU General Public License v3.0 (GPL-3) - see the [GNU GPL v3 license](https://www.gnu.org/licenses/gpl-3.0.en.html) for details.
