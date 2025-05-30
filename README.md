@@ -1,2 +1,130 @@
-# aws_inventory_scan
-Python script to return all ARNs, in all services, in the currently authenticated AWS account
+# AWS Inventory Scanner
+
+A comprehensive Python tool for scanning and inventorying AWS resources across multiple services and regions. This tool discovers and lists all resource ARNs (Amazon Resource Names) in your AWS account.
+
+## Features
+
+- **Multi-Region Support**: Scans resources across all AWS regions or a specific region
+- **Multi-Service Support**: Covers a wide range of AWS services (EC2, S3, Lambda, IAM, etc.)
+- **Parallel Processing**: Uses concurrent execution to speed up scanning
+- **Extensible Architecture**: Easily add support for additional AWS services
+- **Error Handling**: Robust error handling with throttling protection and retries
+- **Detailed Logging**: Configurable logging levels for troubleshooting
+
+## Prerequisites
+
+- Python 3.6+
+- AWS credentials configured (via AWS CLI, environment variables, or IAM role)
+- Required Python packages:
+  - boto3
+  - botocore
+
+## Installation
+
+1. Clone this repository:
+   ```
+   git clone <repository-url>
+   cd aws_inventory_scan
+   ```
+
+2. Install dependencies:
+   ```
+   pip install boto3 botocore
+   ```
+
+## Usage
+
+Basic usage:
+
+```bash
+python scan_aws.py
+```
+
+### Command Line Options
+
+- `--services` or `-s`: Specify additional AWS services to scan. The tool will *always* scan the default set of services ('ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam', 'cloudformation', 'sqs', 'sns', 'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms'), but you can specify *additional* services using this argument.
+- 
+  ```
+  python scan_aws.py -s apigateway kms secretsmanager
+  ```
+
+- `--output` or `-o`: Specify output file path (default: aws_resource_arns.json)
+  ```
+  python scan_aws.py -o my_inventory.json
+  ```
+
+- `--verbose` or `-v`: Enable verbose debug output
+  ```
+  python scan_aws.py -v
+  ```
+
+- `--region` or `-r`: Scan a specific AWS region (default: all regions)
+  ```
+  python scan_aws.py -r us-west-2
+  ```
+
+## Project Structure
+
+- `scan_aws.py`: Main script that orchestrates the scanning process
+- `service_mappings.py`: Contains mappings between AWS services and their API methods
+- `logging_config.py`: Configures logging for the application
+- `services/`: Directory containing service-specific resource collectors
+  - `ec2.py`: EC2 resource collector
+  - `s3.py`: S3 resource collector
+  - `iam.py`: IAM resource collector
+  - `route53.py`: Route53 resource collector
+  - `cloudwatch.py`: CloudWatch resource collector
+  - `logs.py`: CloudWatch Logs resource collector
+  - `kms.py`: KMS resource collector
+
+## Extending the Tool
+
+### Adding Support for a New Service
+
+1. Add service mapping to `service_mappings.py`:
+   ```python
+   'new-service': {
+       'method': 'list_resources',
+       'key': 'Resources',
+       'arn_attr': 'ResourceArn'
+   }
+   ```
+
+2. For more complex services, create a custom collector in the `services` directory:
+   ```python
+   # services/new_service.py
+   def collect_resources(client, region, account_id, resource_arns, verbose=False):
+       # Custom collection logic
+       pass
+   ```
+
+## Output
+
+The tool generates a JSON file containing an array of all discovered resource ARNs:
+
+```json
+[
+  "arn:aws:ec2:us-east-1:123456789012:instance/i-0abc123def456789",
+  "arn:aws:s3:::my-bucket",
+  "arn:aws:lambda:us-west-2:123456789012:function:my-function",
+  ...
+]
+```
+
+## Error Handling
+
+The tool handles various AWS API errors:
+- Access denied errors
+- Region opt-in requirements
+- Invalid credentials
+- API throttling (with exponential backoff)
+
+## Performance Considerations
+
+- Uses concurrent execution to scan multiple services and regions in parallel
+- Implements throttling protection with exponential backoff
+- For very large AWS accounts, consider using the `--region` flag to scan one region at a time
+
+## License
+
+GPL-3
