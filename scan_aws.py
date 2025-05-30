@@ -19,6 +19,7 @@ import random
 import os
 import importlib.util
 import time
+from typing import Dict, List, Optional, Any, Union, Callable
 from logging_config import configure_logging, get_logger
 
 # Import configuration
@@ -26,7 +27,7 @@ try:
     from config import get_config, get_aws_config, get_output_config, get_scan_config
 except ImportError:
     # Fallback if config module is not available
-    def get_aws_config():
+    def get_aws_config() -> Dict[str, Any]:
         return {
             "default_region": "us-east-1",
             "global_services": ['iam', 's3', 'route53', 'cloudfront', 'organizations',
@@ -39,12 +40,12 @@ except ImportError:
             "initial_backoff": 1
         }
     
-    def get_output_config():
+    def get_output_config() -> Dict[str, Any]:
         return {
             "default_output_file": "aws_resource_arns.json"
         }
     
-    def get_scan_config():
+    def get_scan_config() -> Dict[str, Any]:
         return {
             "scan_all_regions": True
         }
@@ -385,7 +386,9 @@ def collect_resources_for_service(service_name, region, account_id, resource_arn
         if verbose:
             logger.debug(f"Full exception details for {service_name} in {region}: {type(e).__name__}: {str(e)}")
 
-def get_all_resource_arns(additional_services=None, specific_region=None, verbose=False):
+def get_all_resource_arns(additional_services: Optional[List[str]] = None, 
+                      specific_region: Optional[str] = None, 
+                      verbose: bool = False) -> List[str]:
 
     global logger
     if logger is None:
@@ -414,7 +417,7 @@ def get_all_resource_arns(additional_services=None, specific_region=None, verbos
         'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms',
     ])
 
-    resource_arns = []
+    resource_arns: List[str] = []
 
     # Use ThreadPoolExecutor to parallelize API calls
     services = default_services.copy()
