@@ -34,33 +34,46 @@ A comprehensive Python tool for scanning and inventorying AWS resources across m
 
 ## Usage
 
-Basic usage:
+### Basic Usage
 
 ```bash
+# Using the installed command-line tool
+aws-inventory-scan scan
+
+# Using the Python module directly
+python -m aws_inventory_scan
+
+# Using the script directly
 python scan_aws.py
 ```
 
 ### Command Line Options
 
-- `--services` or `-s`: Specify additional AWS services to scan. The tool will *always* scan the default set of services ('ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam', 'cloudformation', 'sqs', 'sns', 'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms'), but you can specify *additional* services using this argument.
-  ```
-  python scan_aws.py -s apigateway kms secretsmanager
-  ```
+```bash
+# Scan with additional services
+aws-inventory-scan scan -s apigateway kms secretsmanager
 
-- `--output` or `-o`: Specify output file path (default: aws_resource_arns.json)
-  ```
-  python scan_aws.py -o my_inventory.json
-  ```
+# Specify output file
+aws-inventory-scan scan -o my_inventory.json
 
-- `--verbose` or `-v`: Enable verbose debug output
-  ```
-  python scan_aws.py -v
-  ```
+# Enable verbose output
+aws-inventory-scan scan -v
 
-- `--region` or `-r`: Scan a specific AWS region (default: all regions)
-  ```
-  python scan_aws.py -r us-west-2
-  ```
+# Scan a specific region
+aws-inventory-scan scan -r us-west-2
+
+# Use a custom configuration file
+aws-inventory-scan scan -c my_config.json
+
+# Create a default configuration file
+aws-inventory-scan config create
+
+# Show current configuration
+aws-inventory-scan config show
+
+# Show version information
+aws-inventory-scan version
+```
 
 ## Project Structure
 

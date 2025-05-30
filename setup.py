@@ -52,7 +52,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "aws-inventory-scan=aws_inventory_scan.scan_aws:main",
+            "aws-inventory-scan=aws_inventory_scan.cli:main",
         ],
     },
     include_package_data=True,
