@@ -17,6 +17,6 @@ multiple services and regions. This tool discovers and lists all resource ARNs
 """
 
 __version__ = '0.2.0'
-__author__ = 'Your Name'
-__email__ = 'your.email@example.com'
+__author__ = 'Phil Desrosiers'
+__email__ = 'philippe.desrosiers@gmail.com'
 __license__ = 'GPL-3.0'
