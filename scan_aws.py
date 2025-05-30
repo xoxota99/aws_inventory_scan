@@ -21,15 +21,45 @@ import importlib.util
 import time
 from logging_config import configure_logging, get_logger
 
+# Import configuration
+try:
+    from config import get_config, get_aws_config, get_output_config, get_scan_config
+except ImportError:
+    # Fallback if config module is not available
+    def get_aws_config():
+        return {
+            "default_region": "us-east-1",
+            "global_services": ['iam', 's3', 'route53', 'cloudfront', 'organizations',
+                              'waf', 'shield', 'budgets', 'ce', 'chatbot', 'health'],
+            "default_services": ['ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
+                               'cloudformation', 'sqs', 'sns',
+                               'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms'],
+            "max_threads": 5,
+            "max_retries": 5,
+            "initial_backoff": 1
+        }
+    
+    def get_output_config():
+        return {
+            "default_output_file": "aws_resource_arns.json"
+        }
+    
+    def get_scan_config():
+        return {
+            "scan_all_regions": True
+        }
+
 # Load service-specific collectors
 SERVICE_COLLECTORS = {}
 
+# Get AWS configuration
+aws_config = get_aws_config()
+
 # Default region for global services
-default_region = 'us-east-1'
+default_region = aws_config["default_region"]
 
 # Define global services that should only be queried once
-global_services = ['iam', 's3', 'route53', 'cloudfront', 'organizations',
-                  'waf', 'shield', 'budgets', 'ce', 'chatbot', 'health']
+global_services = aws_config["global_services"]
 
 # Configure logging
 logger = None  # Will be initialized in main()
@@ -218,7 +248,7 @@ def get_service_resources(client, service_name, region, account_id, verbose=Fals
 
     return resources
 
-def aws_api_call_with_retry(api_function, max_retries=5, initial_backoff=1, **kwargs):
+def aws_api_call_with_retry(api_function, max_retries=None, initial_backoff=None, **kwargs):
     """
     Execute an AWS API call with exponential backoff retry logic for throttling errors.
 
@@ -231,6 +261,14 @@ def aws_api_call_with_retry(api_function, max_retries=5, initial_backoff=1, **kw
     Returns:
         The API response
     """
+    # Use configuration values if not specified
+    aws_config = get_aws_config()
+    if max_retries is None:
+        max_retries = aws_config.get("max_retries", 5)
+    if initial_backoff is None:
+        initial_backoff = aws_config.get("initial_backoff", 1)
+    max_backoff = aws_config.get("max_backoff", 60)
+    
     retries = 0
     while True:
         try:
@@ -238,7 +276,7 @@ def aws_api_call_with_retry(api_function, max_retries=5, initial_backoff=1, **kw
         except Exception as e:
             if is_throttling_error(e) and retries < max_retries:
                 # Calculate exponential backoff with jitter
-                backoff = min(initial_backoff * (2 ** retries) + random.uniform(0, 1), 60)
+                backoff = min(initial_backoff * (2 ** retries) + random.uniform(0, 1), max_backoff)
                 retries += 1
                 logger.warning(f"Request throttled. Retrying in {backoff:.2f} seconds... (Attempt {retries}/{max_retries})")
                 time.sleep(backoff)
@@ -355,16 +393,26 @@ def get_all_resource_arns(additional_services=None, specific_region=None, verbos
 
     """Get ARNs for all resources across supported services and regions."""
     account_id = get_account_id()
-    # Use specific region if provided, otherwise get all regions
-    regions = [specific_region] if specific_region else get_all_regions()
+    
+    # Get scan configuration
+    scan_config = get_scan_config()
+    
+    # Use specific region if provided, otherwise get all regions if scan_all_regions is True
+    if specific_region:
+        regions = [specific_region]
+    elif scan_config.get("scan_all_regions", True):
+        regions = get_all_regions()
+    else:
+        # If scan_all_regions is False and no specific region provided, use default region
+        regions = [get_aws_config().get("default_region", "us-east-1")]
 
     # List of services to check
-    default_services = [
-        # Default services to scan
+    aws_config = get_aws_config()
+    default_services = aws_config.get("default_services", [
         'ec2', 's3', 'lambda', 'dynamodb', 'rds', 'iam',
         'cloudformation', 'sqs', 'sns',
         'kinesisanalytics', 'kinesisanalyticsv2', 'cloudwatch', 'logs', 'route53', 'ecs', 'kms',
-    ]
+    ])
 
     resource_arns = []
 
@@ -375,7 +423,10 @@ def get_all_resource_arns(additional_services=None, specific_region=None, verbos
     if additional_services:
         services.extend([s for s in additional_services if s not in services])
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    # Get max threads from config
+    max_threads = aws_config.get("max_threads", 5)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = []
 
         for service in services:
@@ -424,9 +475,15 @@ def main():
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description='List all AWS resource ARNs under the currently logged-in account.')
     parser.add_argument('--services', '-s', nargs='+', help='Additional AWS services to scan (e.g., "apigateway" "kms" "secretsmanager")')
-    parser.add_argument('--output', '-o', default='aws_resource_arns.json', help='Output file path (default: aws_resource_arns.json)')
+    
+    # Get default output file from config
+    output_config = get_output_config()
+    default_output_file = output_config.get("default_output_file", "aws_resource_arns.json")
+    
+    parser.add_argument('--output', '-o', default=default_output_file, help=f'Output file path (default: {default_output_file})')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose debug output')
     parser.add_argument('--region', '-r', help='Specific AWS region to scan (default: scan all regions)')
+    parser.add_argument('--config', '-c', help='Path to custom configuration file')
 
     args = parser.parse_args()
 
@@ -438,7 +495,13 @@ def main():
 
     if args.region:
         print(f"Scanning only region: {args.region}")
-        print("Scanning all available regions")
+    else:
+        scan_config = get_scan_config()
+        if scan_config.get("scan_all_regions", True):
+            print("Scanning all available regions")
+        else:
+            default_region = get_aws_config().get("default_region", "us-east-1")
+            print(f"Scanning default region: {default_region}")
         
     # Update logger with verbose setting if needed
     if args.verbose:
@@ -461,7 +524,12 @@ def main():
 
     # Optionally save to a file
     with open(output_file, 'w') as f:
-        json.dump(resource_arns, f, indent=2)
+        # Check if pretty print is enabled in config
+        output_config = get_output_config()
+        if output_config.get("pretty_print", True):
+            json.dump(resource_arns, f, indent=2)
+        else:
+            json.dump(resource_arns, f)
 
     print(f"\nResource ARNs have been saved to {output_file}")
 

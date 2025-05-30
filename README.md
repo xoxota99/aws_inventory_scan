@@ -97,6 +97,51 @@ python scan_aws.py
        pass
    ```
 
+## Configuration
+
+The tool can be configured using a JSON configuration file. By default, it looks for configuration files in the following locations (in order of precedence):
+
+1. `./aws_inventory_scan.json` (current directory)
+2. `~/.aws_inventory_scan.json` (user's home directory)
+3. `/etc/aws_inventory_scan.json` (system-wide configuration)
+
+You can also specify a custom configuration file using the `--config` option.
+
+### Configuration Options
+
+```json
+{
+  "aws": {
+    "default_region": "us-east-1",
+    "global_services": ["iam", "s3", "route53", "cloudfront", "organizations"],
+    "default_services": ["ec2", "s3", "lambda", "dynamodb", "rds", "iam"],
+    "max_threads": 5,
+    "max_retries": 5,
+    "initial_backoff": 1,
+    "max_backoff": 60
+  },
+  
+  "output": {
+    "default_output_file": "aws_resource_arns.json",
+    "output_format": "json",
+    "pretty_print": true
+  },
+  
+  "logging": {
+    "log_level": "INFO",
+    "log_file": "",
+    "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  
+  "scan": {
+    "include_objects": true,
+    "max_objects_per_bucket": 100,
+    "scan_all_regions": true,
+    "skip_empty_services": true
+  }
+}
+```
+
 ## Output
 
 The tool generates a JSON file containing an array of all discovered resource ARNs:

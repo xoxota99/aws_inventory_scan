@@ -112,7 +112,6 @@ dmypy.json
 
 # AWS specific
 aws_resource_arns.json
-*.json
 
 # IDE specific files
 .idea/
