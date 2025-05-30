@@ -16,4 +16,7 @@ multiple services and regions. This tool discovers and lists all resource ARNs
 (Amazon Resource Names) in your AWS account.
 """
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
+__author__ = 'Your Name'
+__email__ = 'your.email@example.com'
+__license__ = 'GPL-3.0'
